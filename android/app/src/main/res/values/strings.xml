@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Kinetrack</string>
+    <string name="title_activity_main">Kinetrack</string>
+    <string name="package_name">com.aleeh.kinetrack</string>
+    <string name="custom_url_scheme">com.aleeh.kinetrack</string>
+</resources>

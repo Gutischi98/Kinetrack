@@ -1,0 +1,5 @@
+{
+  "name": "KineTrack - Ejercicio y Evolución",
+  "description": "App para coordinar tiempos de ejercicio y medir rangos de movimiento articular.",
+  "requestFramePermissions": ["accelerometer", "gyrophone", "magnetometer"]
+}
