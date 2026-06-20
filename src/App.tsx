@@ -5,6 +5,7 @@ import {
   History as HistoryIcon,
   ClipboardList,
   X,
+  Bell
 } from "lucide-react";
 import Timer from "./components/Timer";
 import Evolution from "./components/Evolution";
@@ -12,15 +13,20 @@ import { StatusBar } from "@capacitor/status-bar";
 import { App as CapacitorApp } from "@capacitor/app";
 import History from "./components/History";
 import Questionnaire from "./components/Questionnaire";
+import NotificationOverlay from "./components/NotificationOverlay";
+import NotificationsHistory from "./components/NotificationsHistory";
+import { useNotifications } from "./hooks/useNotifications";
 import { motion, AnimatePresence } from "motion/react";
 import { Measurement, QuestionnaireResult, HistoryItem } from "./types";
 
-type View = "menu" | "timer" | "evolution" | "history" | "questionnaire";
+type View = "menu" | "timer" | "evolution" | "history" | "questionnaire" | "notifications";
 
 export default function App() {
   const [currentView, setCurrentView] = useState<View>("menu");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [showAbout, setShowAbout] = useState(false);
+  const { notifications } = useNotifications();
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   const configureScreen = async () => {
     try {
@@ -29,8 +35,8 @@ export default function App() {
         // HIDE_NAVIGATION(2) | IMMERSIVE_STICKY(4096) | LAYOUT_HIDE_NAVIGATION(512) | LAYOUT_STABLE(256)
         (window as any).AndroidFullScreen.setSystemUiVisibility(
           4866,
-          () => {},
-          () => {},
+          () => { },
+          () => { },
         );
       }
     } catch (e) {
@@ -88,6 +94,7 @@ export default function App() {
 
   return (
     <div className="fixed inset-0 bg-black font-sans select-none overflow-hidden">
+      <NotificationOverlay />
       <AnimatePresence mode="wait">
         {currentView === "menu" && (
           <motion.div
@@ -96,9 +103,9 @@ export default function App() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.2 }}
-            className="flex flex-col h-full p-8 justify-center space-y-8"
+            className="flex flex-col h-full p-6 sm:p-8 justify-start overflow-y-auto space-y-4 pb-12 pt-8"
           >
-            <div className="text-center mb-8">
+            <div className="text-center mb-6">
               <h1
                 onClick={() => setShowAbout(true)}
                 className="text-5xl font-black text-white tracking-tighter cursor-pointer hover:text-gray-300 transition-colors inline-block active:scale-95"
@@ -152,7 +159,7 @@ export default function App() {
               </div>
               <div className="text-left">
                 <h2 className="text-2xl font-bold text-white">Cuestionario</h2>
-                <p className="text-gray-500 text-sm">Índice WORC | Índice PWRE</p>
+                <p className="text-gray-500 text-sm">Índice WORC | Índice PWRE | Índice PSQI</p>
               </div>
               <div className="absolute right-8 opacity-10 group-hover:opacity-20 transition-opacity">
                 <ClipboardList size={80} />
@@ -174,6 +181,27 @@ export default function App() {
               </div>
               <div className="absolute right-8 opacity-10 group-hover:opacity-20 transition-opacity">
                 <HistoryIcon size={80} />
+              </div>
+            </button>
+
+            <button
+              onClick={() => setCurrentView("notifications")}
+              className="group relative bg-[#1e1e1e] p-8 rounded-[2.5rem] flex items-center gap-6 transition-all hover:bg-[#252525] active:scale-95 overflow-hidden"
+            >
+              <div className="w-16 h-16 bg-yellow-600/20 rounded-2xl flex items-center justify-center text-yellow-500 relative">
+                <Bell size={32} />
+                {unreadCount > 0 && (
+                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-[#1e1e1e]" />
+                )}
+              </div>
+              <div className="text-left">
+                <h2 className="text-2xl font-bold text-white">Notificaciones</h2>
+                <p className="text-gray-500 text-sm">
+                  {unreadCount > 0 ? `${unreadCount} sin leer` : 'Revisar avisos'}
+                </p>
+              </div>
+              <div className="absolute right-8 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Bell size={80} />
               </div>
             </button>
           </motion.div>
@@ -241,6 +269,21 @@ export default function App() {
             />
           </motion.div>
         )}
+
+        {currentView === "notifications" && (
+          <motion.div
+            key="notifications"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            transition={{ duration: 0.2 }}
+            className="h-full"
+          >
+            <NotificationsHistory
+              onBack={() => setCurrentView("menu")}
+            />
+          </motion.div>
+        )}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -266,7 +309,7 @@ export default function App() {
               </button>
 
               <h2 className="text-2xl font-black text-orange-500 tracking-tighter mb-8">
-                KINETRACK
+                KINETRACK V2
               </h2>
 
               <div className="space-y-2 text-gray-300 font-medium">
@@ -276,7 +319,7 @@ export default function App() {
               </div>
 
               <div className="mt-8 space-y-1 text-sm text-gray-500">
-                <p className="font-bold">Version 2.1.5</p>
+                <p className="font-bold">Version 3.1.1</p>
                 <p>Abril 2026</p>
                 <p>Gran Concepción, Chile.</p>
               </div>

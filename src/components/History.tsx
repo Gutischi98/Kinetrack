@@ -99,7 +99,7 @@ export default function History({ history, onDelete, onBack }: HistoryProps) {
 *Paciente:* ${item.patientName || 'Anónimo'}
 
 *Resultado:*
-- ${item.questionnaireName === 'WORC' ? `Funcionalidad: ${item.score}%` : `Puntaje de Discapacidad: ${item.score}/100`}`;
+- ${item.questionnaireName === 'WORC' ? `Funcionalidad: ${item.score}%` : item.questionnaireName === 'PRWE' ? `Puntaje de Discapacidad: ${item.score}/100` : `Puntaje Global PSQI: ${item.score}`}`;
     } else {
       const m = item as Measurement;
       text = `*Evaluación Kinesica*
@@ -286,9 +286,9 @@ ${m.shoulderFlexion !== null ? `- Flexión Hombro: ${m.shoulderFlexion}°\n` : '
                 <div className="pt-2">
                   <div className="bg-[#2a2a2a] rounded-2xl p-4 flex items-center justify-between">
                     <span className="text-gray-400 uppercase tracking-widest text-xs font-bold">
-                      {item.questionnaireName === 'WORC' ? 'Funcionalidad' : 'Discapacidad'}
+                      {item.questionnaireName === 'WORC' ? 'Funcionalidad' : item.questionnaireName === 'PRWE' ? 'Discapacidad' : 'Calidad de Sueño (PSQI)'}
                     </span>
-                    <span className={`text-2xl font-black ${item.questionnaireName === 'WORC' ? 'text-blue-500' : 'text-purple-500'}`}>
+                    <span className={`text-2xl font-black ${item.questionnaireName === 'WORC' ? 'text-blue-500' : item.questionnaireName === 'PRWE' ? 'text-purple-500' : 'text-emerald-500'}`}>
                       {item.score}{item.questionnaireName === 'WORC' ? '%' : ''}
                     </span>
                   </div>

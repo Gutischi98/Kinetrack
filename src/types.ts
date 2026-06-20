@@ -24,7 +24,7 @@ export interface Measurement {
 export interface QuestionnaireResult {
   id: string;
   type: 'questionnaire';
-  questionnaireName: 'WORC' | 'PRWE';
+  questionnaireName: 'WORC' | 'PRWE' | 'PSQI';
   date: string;
   patientName: string;
   score: number;
@@ -34,6 +34,16 @@ export type HistoryItem = Measurement | QuestionnaireResult;
 
 export type TimerState = 'idle' | 'countdown' | 'running' | 'paused' | 'flash' | 'completed';
 export type TimerPhase = 'work' | 'rest';
+
+export interface AppNotification {
+  id: string;
+  patientName: string;
+  time: string;
+  date: string;
+  read: boolean;
+  timestamp: number;
+}
+
 
 export interface TimerConfig {
   workTime: number;

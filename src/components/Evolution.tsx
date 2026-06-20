@@ -36,6 +36,13 @@ export default function Evolution({ onSave, onViewHistory, onBack }: EvolutionPr
   const [isDischarged, setIsDischarged] = useState(false);
 
   const [isCalibrated, setIsCalibrated] = useState(false);
+  const [attempts, setAttempts] = useState<Record<string, number[]>>({});
+  const [isMeasuring, setIsMeasuring] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(3000);
+  const [showAttemptsHistory, setShowAttemptsHistory] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  const maxAngleRef = useRef(0);
+  const isMeasuringRef = useRef(false);
   
   const stepRef = useRef<MeasurementStep>('form');
   const isCalibratedRef = useRef(false);
@@ -255,12 +262,16 @@ export default function Evolution({ onSave, onViewHistory, onBack }: EvolutionPr
 
       const finalDeg = Math.round(Math.abs(deg) / 2) * 2;
       
-      setAngles(prev => {
-        if (prev[stepRef.current] !== finalDeg) {
-          playClick();
+      if (isMeasuringRef.current) {
+        if (finalDeg > maxAngleRef.current) {
+          maxAngleRef.current = finalDeg;
+          setAngles(prev => {
+            if (prev[stepRef.current] !== finalDeg) playClick();
+            return { ...prev, [stepRef.current]: finalDeg };
+          });
         }
-        return { ...prev, [stepRef.current]: finalDeg };
-      });
+      }
+      // Se eliminó el bloque else if para evitar sobreescribir el ángulo con la posición de reposo.
     }
   };
 
@@ -270,7 +281,55 @@ export default function Evolution({ onSave, onViewHistory, onBack }: EvolutionPr
     };
   }, []);
 
-  const calibrateAndStart = () => {
+  const getGroupName = (s: string) => {
+    if (['shoulder', 'abduction'].includes(s)) return 'Hombro';
+    if (['elbow'].includes(s)) return 'Codo';
+    if (['wristFlexion', 'wristExtension'].includes(s)) return 'Muñeca';
+    if (['pronation', 'supination'].includes(s)) return 'Mano';
+    return '';
+  };
+
+  const skipGroup = () => {
+    const group = getGroupName(step);
+    setAngles(prev => {
+      const next = { ...prev };
+      if (group === 'Hombro') {
+        if (step === 'shoulder') { next.shoulder = null; next.abduction = null; }
+        if (step === 'abduction') { next.abduction = null; }
+      }
+      if (group === 'Codo') { next.elbow = null; }
+      if (group === 'Muñeca') {
+        if (step === 'wristFlexion') { next.wristFlexion = null; next.wristExtension = null; }
+        if (step === 'wristExtension') { next.wristExtension = null; }
+      }
+      if (group === 'Mano') {
+        if (step === 'pronation') { next.pronation = null; next.supination = null; }
+        if (step === 'supination') { next.supination = null; }
+      }
+      return next;
+    });
+    setShowSkipConfirm(false);
+    
+    if (group === 'Hombro') jumpToStep('elbow');
+    else if (group === 'Codo') jumpToStep('wristFlexion');
+    else if (group === 'Muñeca') jumpToStep('pronation');
+    else if (group === 'Mano') jumpToStep('reach');
+  };
+
+  const jumpToStep = (newStep: MeasurementStep) => {
+    setStep(newStep);
+    stepRef.current = newStep;
+    setIsCalibrated(false);
+    isCalibratedRef.current = false;
+    isMeasuringRef.current = false;
+    setIsMeasuring(false);
+    if (timerRef.current) clearInterval(timerRef.current as any);
+    if (newStep === 'reach') {
+      window.removeEventListener('devicemotion', handleMotion);
+    }
+  };
+
+  const startMeasurementTimer = () => {
     zeroVectorRef.current = [...rawVectorRef.current];
     isCalibratedRef.current = true;
     setIsCalibrated(true);
@@ -278,45 +337,51 @@ export default function Evolution({ onSave, onViewHistory, onBack }: EvolutionPr
     lastAtanAngleRef.current = 0;
     accumAngleRef.current = 0;
     isManualOverrideRef.current = false;
+    
+    isMeasuringRef.current = true;
+    setIsMeasuring(true);
+    setTimeLeft(3000);
+    maxAngleRef.current = 0;
+    setAngles(prev => ({ ...prev, [stepRef.current]: 0 }));
+    playClick();
+
+    const startTime = Date.now();
+    
+    timerRef.current = window.setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remaining = Math.max(0, 3000 - elapsed);
+      setTimeLeft(remaining);
+      
+      if (remaining <= 0) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        isMeasuringRef.current = false;
+        setIsMeasuring(false);
+        // NO desactivamos la calibración para que la aguja se quede congelada en el ángulo máximo
+        
+        setAttempts(prev => {
+          const currentAttempts = prev[stepRef.current] || [];
+          return {
+            ...prev,
+            [stepRef.current]: [...currentAttempts, maxAngleRef.current]
+          };
+        });
+        
+        playClick();
+        setTimeout(playClick, 150);
+      }
+    }, 50);
   };
 
   const nextStep = () => {
-    isCalibratedRef.current = false;
-    setIsCalibrated(false);
-    rotAxisRef.current = null;
-    lastAtanAngleRef.current = 0;
-    accumAngleRef.current = 0;
-    isManualOverrideRef.current = false;
-    
-    if (step === 'shoulder') {
-      setStep('abduction');
-      stepRef.current = 'abduction';
-    } else if (step === 'abduction') {
-      setStep('elbow');
-      stepRef.current = 'elbow';
-    } else if (step === 'elbow') {
-      setStep('wristFlexion');
-      stepRef.current = 'wristFlexion';
-    } else if (step === 'wristFlexion') {
-      setStep('wristExtension');
-      stepRef.current = 'wristExtension';
-    } else if (step === 'wristExtension') {
-      setStep('pronation');
-      stepRef.current = 'pronation';
-    } else if (step === 'pronation') {
-      setStep('supination');
-      stepRef.current = 'supination';
-    } else if (step === 'supination') {
-      setStep('reach');
-      stepRef.current = 'reach';
-      window.removeEventListener('devicemotion', handleMotion);
-    } else if (step === 'reach') {
-      setStep('observations');
-      stepRef.current = 'observations';
-    } else if (step === 'observations') {
-      setStep('summary');
-      stepRef.current = 'summary';
-    }
+    if (step === 'shoulder') jumpToStep('abduction');
+    else if (step === 'abduction') jumpToStep('elbow');
+    else if (step === 'elbow') jumpToStep('wristFlexion');
+    else if (step === 'wristFlexion') jumpToStep('wristExtension');
+    else if (step === 'wristExtension') jumpToStep('pronation');
+    else if (step === 'pronation') jumpToStep('supination');
+    else if (step === 'supination') jumpToStep('reach');
+    else if (step === 'reach') jumpToStep('observations');
+    else if (step === 'observations') jumpToStep('summary');
   };
 
   const handleSave = () => {
@@ -421,7 +486,7 @@ export default function Evolution({ onSave, onViewHistory, onBack }: EvolutionPr
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
-            className="flex-1 flex flex-col justify-center space-y-6 max-w-sm mx-auto w-full"
+            className="flex-1 flex flex-col space-y-6 max-w-sm mx-auto w-full overflow-y-auto pb-12"
           >
             <div className="space-y-2 text-center mb-4">
               <h2 className="text-2xl font-bold text-orange-500">Datos del Paciente</h2>
@@ -566,6 +631,59 @@ export default function Evolution({ onSave, onViewHistory, onBack }: EvolutionPr
                   ))}
                 </div>
               </div>
+            </div>
+
+            <div className="bg-[#1e1e1e] border border-[#2a2a2a] rounded-3xl p-6 space-y-4 shrink-0 mt-4">
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="font-bold text-gray-400 uppercase tracking-widest text-sm">Planificación</h3>
+                <button 
+                  onClick={() => {
+                    setIsDischarged(!isDischarged);
+                    if (!isDischarged) {
+                      setNextSession('');
+                      setNextSessionTime('');
+                    }
+                  }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${isDischarged ? 'bg-green-600/20 text-green-400 border border-green-500/50' : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#333]'}`}
+                >
+                  <UserCheck size={14} />
+                  {isDischarged ? 'De Alta' : 'Dar de Alta'}
+                </button>
+              </div>
+              
+              {!isDischarged && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500">Fecha próxima sesión</label>
+                    <input 
+                      type="date" 
+                      value={nextSession}
+                      onChange={(e) => setNextSession(e.target.value)}
+                      className="w-full bg-[#2a2a2a] border border-[#333] rounded-xl p-3 text-white focus:outline-none focus:border-orange-500 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-500">Hora</label>
+                    <select 
+                      value={nextSessionTime}
+                      onChange={(e) => setNextSessionTime(e.target.value)}
+                      className="w-full bg-[#2a2a2a] border border-[#333] rounded-xl p-3 text-white focus:outline-none focus:border-orange-500 text-sm"
+                    >
+                      <option value="">Seleccionar</option>
+                      {timeOptions.map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {scheduleConflict && (
+                    <div className="col-span-2 mt-1 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl">
+                      <p className="text-red-400 text-xs font-bold leading-tight">
+                        ⚠️ Ya hay un paciente asignado a esta fecha y hora ({(scheduleConflict as Measurement).patientName || 'Anónimo'}).
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <button
@@ -749,43 +867,55 @@ export default function Evolution({ onSave, onViewHistory, onBack }: EvolutionPr
               )}
             </div>
 
-            <div className="flex flex-col gap-4 w-full max-w-xs">
-              {!isCalibrated ? (
+            <div className="flex flex-col gap-4 w-full max-w-xs relative z-30">
+              {!isMeasuring && !(attempts[step]?.length > 0) ? (
                 <>
                   <button
-                    onClick={calibrateAndStart}
+                    onClick={startMeasurementTimer}
                     className="bg-orange-600 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-orange-500 transition-all"
                   >
-                    <Crosshair size={20} /> Calibrar a 0° e Iniciar
+                    <Crosshair size={20} /> Calibrar a 0° e Iniciar (3s)
                   </button>
                   <button
                     onClick={() => setShowSkipConfirm(true)}
-                    className="w-full mt-2 bg-[#1e1e1e] border border-[#333] text-gray-400 py-3 rounded-2xl font-bold hover:bg-[#2a2a2a] hover:text-white transition-all"
+                    className="w-full mt-2 bg-[#1e1e1e] border border-[#333] text-gray-400 py-3 rounded-2xl font-bold hover:bg-[#2a2a2a] hover:text-white transition-all text-sm"
                   >
-                    Omitir esta medida
+                    Omitir grupo {getGroupName(step)}
                   </button>
                 </>
+              ) : isMeasuring ? (
+                <div className="flex flex-col items-center justify-center py-4 space-y-2 bg-[#2a2a2a] rounded-2xl border-2 border-orange-500 animate-pulse">
+                   <span className="text-sm font-bold text-gray-400 uppercase tracking-widest">Midiendo...</span>
+                   <span className="text-4xl font-bold text-white">{(timeLeft / 1000).toFixed(1)}s</span>
+                </div>
               ) : (
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-3">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={startMeasurementTimer}
+                      className="flex-1 bg-[#2a2a2a] py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-[#3a3a3a] transition-all"
+                      title="Repetir intento"
+                    >
+                      <RotateCcw size={20} />
+                    </button>
+                    <button
+                      onClick={() => setShowAttemptsHistory(true)}
+                      className="flex-1 bg-blue-600/20 text-blue-500 border border-blue-500/30 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-blue-600/30 transition-all"
+                    >
+                      <HistoryIcon size={20} />
+                    </button>
+                    <button
+                      onClick={nextStep}
+                      className="flex-[2] bg-green-600 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-green-500 transition-all"
+                    >
+                      Siguiente <ChevronRight size={20} />
+                    </button>
+                  </div>
                   <button
-                    onClick={() => {
-                      setIsCalibrated(false);
-                      isCalibratedRef.current = false;
-                      rotAxisRef.current = null;
-                      lastAtanAngleRef.current = 0;
-                      accumAngleRef.current = 0;
-                      isManualOverrideRef.current = false;
-                      setAngles(prev => ({ ...prev, [step]: 0 }));
-                    }}
-                    className="flex-1 bg-[#2a2a2a] py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-[#3a3a3a] transition-all"
+                    onClick={() => setShowSkipConfirm(true)}
+                    className="w-full bg-[#1e1e1e] border border-[#333] text-gray-400 py-3 rounded-2xl font-bold hover:bg-[#2a2a2a] hover:text-white transition-all text-sm"
                   >
-                    <RotateCcw size={20} />
-                  </button>
-                  <button
-                    onClick={nextStep}
-                    className="flex-[3] bg-green-600 py-4 rounded-2xl font-bold flex items-center justify-center gap-2 hover:bg-green-500 transition-all"
-                  >
-                    Fijar y Siguiente <ChevronRight size={20} />
+                    Omitir grupo {getGroupName(step)}
                   </button>
                 </div>
               )}
@@ -871,58 +1001,7 @@ export default function Evolution({ onSave, onViewHistory, onBack }: EvolutionPr
               </div>
             </div>
 
-            <div className="bg-[#1e1e1e] rounded-3xl p-6 space-y-4 shrink-0">
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="font-bold text-gray-400 uppercase tracking-widest text-sm">Planificación</h3>
-                <button 
-                  onClick={() => {
-                    setIsDischarged(!isDischarged);
-                    if (!isDischarged) {
-                      setNextSession('');
-                      setNextSessionTime('');
-                    }
-                  }}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${isDischarged ? 'bg-green-600/20 text-green-400 border border-green-500/50' : 'bg-[#2a2a2a] text-gray-400 hover:bg-[#333]'}`}
-                >
-                  <UserCheck size={14} />
-                  {isDischarged ? 'De Alta' : 'Dar de Alta'}
-                </button>
-              </div>
-              
-              {!isDischarged && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <label className="text-xs text-gray-500">Fecha próxima sesión</label>
-                    <input 
-                      type="date" 
-                      value={nextSession}
-                      onChange={(e) => setNextSession(e.target.value)}
-                      className="w-full bg-[#2a2a2a] border border-[#333] rounded-xl p-3 text-white focus:outline-none focus:border-orange-500 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-gray-500">Hora</label>
-                    <select 
-                      value={nextSessionTime}
-                      onChange={(e) => setNextSessionTime(e.target.value)}
-                      className="w-full bg-[#2a2a2a] border border-[#333] rounded-xl p-3 text-white focus:outline-none focus:border-orange-500 text-sm"
-                    >
-                      <option value="">Seleccionar</option>
-                      {timeOptions.map(t => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {scheduleConflict && (
-                    <div className="col-span-2 mt-1 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl">
-                      <p className="text-red-400 text-xs font-bold leading-tight">
-                        ⚠️ Ya hay un paciente asignado a esta fecha y hora ({(scheduleConflict as Measurement).patientName || 'Anónimo'}).
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+
 
             <div className="grid grid-cols-2 gap-4 shrink-0 pt-2">
               <button
@@ -1029,6 +1108,60 @@ export default function Evolution({ onSave, onViewHistory, onBack }: EvolutionPr
         )}
       </AnimatePresence>
 
+      {/* Attempts History Modal */}
+      <AnimatePresence>
+        {showAttemptsHistory && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#1e1e1e] rounded-3xl p-6 w-full max-w-sm space-y-6 border border-[#2a2a2a] shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold text-white">Historial de Intentos</h2>
+                <button onClick={() => setShowAttemptsHistory(false)} className="text-gray-400 hover:text-white p-1">
+                  <X size={24} />
+                </button>
+              </div>
+              
+              <div className="space-y-3">
+                {attempts[step]?.map((angle, idx) => (
+                  <div key={idx} className="flex justify-between items-center bg-[#2a2a2a] p-4 rounded-xl">
+                    <span className="text-gray-400 font-bold">Intento {idx + 1}</span>
+                    <span className="text-2xl font-bold text-orange-500">{angle}°</span>
+                  </div>
+                ))}
+                {(!attempts[step] || attempts[step].length === 0) && (
+                  <p className="text-gray-500 text-center py-4">No hay intentos registrados aún.</p>
+                )}
+              </div>
+              
+              {attempts[step]?.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-[#333] flex justify-between items-center">
+                  <span className="text-gray-300 font-bold">Promedio:</span>
+                  <span className="text-3xl font-black text-blue-400">
+                    {Math.round(attempts[step].reduce((a, b) => a + b, 0) / attempts[step].length)}°
+                  </span>
+                </div>
+              )}
+              
+              <button
+                onClick={() => setShowAttemptsHistory(false)}
+                className="w-full mt-4 py-4 rounded-xl bg-orange-600 text-white hover:bg-orange-500 transition-colors font-bold"
+              >
+                Cerrar
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Skip Confirmation Modal */}
       <AnimatePresence>
         {showSkipConfirm && (
@@ -1044,9 +1177,9 @@ export default function Evolution({ onSave, onViewHistory, onBack }: EvolutionPr
               exit={{ scale: 0.9, opacity: 0 }}
               className="bg-[#1e1e1e] rounded-3xl p-6 w-full max-w-sm space-y-6 border border-[#2a2a2a] shadow-2xl"
             >
-              <h2 className="text-xl font-bold text-white text-center">Omitir medición</h2>
+              <h2 className="text-xl font-bold text-white text-center">Omitir grupo</h2>
               <p className="text-gray-400 text-center text-sm">
-                ¿Estás seguro de omitir esta medida? No se registrarán datos y pasaremos al siguiente paso.
+                ¿Estás seguro de omitir este grupo de medidas? No se registrarán datos y pasaremos al siguiente grupo.
               </p>
               <div className="flex gap-4 pt-2">
                 <button
@@ -1056,11 +1189,7 @@ export default function Evolution({ onSave, onViewHistory, onBack }: EvolutionPr
                   Cancelar
                 </button>
                 <button
-                  onClick={() => {
-                    setAngles(prev => ({ ...prev, [step]: null }));
-                    setShowSkipConfirm(false);
-                    nextStep();
-                  }}
+                  onClick={skipGroup}
                   className="flex-1 py-3 rounded-xl bg-orange-600 text-white hover:bg-orange-500 transition-colors font-bold"
                 >
                   Sí, omitir
