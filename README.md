@@ -57,21 +57,6 @@ Kinetrack está construida sobre una arquitectura moderna y robusta:
 - **Animaciones**: [Motion](https://motion.dev/)
 - **Puente Móvil**: [Capacitor 8](https://capacitorjs.com/) para despliegue nativo en Android.
 
-## 💻 Instalación y Desarrollo
-
-Para ejecutar el proyecto localmente:
-
-1.  **Clonar el repositorio**
-2.  **Instalar dependencias**:
-    ```bash
-    npm install
-    ```
-3.  **Configuración de variables de entorno**:
-    Crea un archivo `.env.local` y añade tu `GEMINI_API_KEY` (si se requiere para funciones de IA).
-4.  **Ejecutar en modo desarrollo**:
-    ```bash
-    npm run dev
-    ```
 
 ## 👥 Autores y Créditos
 
