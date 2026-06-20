@@ -77,9 +77,9 @@ Para ejecutar el proyecto localmente:
 
 Este proyecto es el resultado del trabajo colaborativo de:
 
-- 🎨 **Aleeh**: Diseño de UI/UX y Desarrollo de Lógica.
-- 💻 **Aleeh & Güti**: Desarrollo de Código y Arquitectura.
-- 🏗️ **Güti**: Construcción de Aplicación y Despliegue.
+- 🎨 **Matias Contreras "Aleeh"**: Diseño de UI/UX y Desarrollo de Lógica.
+- 💻 **Matias Contreras "Aleeh" & Gustavo Solar "Güti"**: Desarrollo de Código y Arquitectura.
+- 🏗️ **Gustavo Solar "Güti"**: Construcción de Aplicación y Despliegue.
 
 ---
 
